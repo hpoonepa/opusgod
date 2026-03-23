@@ -1,0 +1,13 @@
+name: opusgod
+author: opusgod
+version: 0.1.0
+description: Autonomous DeFi Intelligence Agent
+license: Apache-2.0
+aea_version: ">=1.55.0, <2.0.0"
+agent_type: service
+number_of_agents: 1
+deployment:
+  agent:
+    ports:
+      - 8716:8716
+      - 8080:8080
