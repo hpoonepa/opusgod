@@ -1,0 +1,15 @@
+{
+  "tracks": [
+    {"name": "Olas Monetize", "prize": 1000, "key": "mech-server"},
+    {"name": "Olas Hire", "prize": 1000, "key": "mech-client"},
+    {"name": "Olas Pearl", "prize": 1000, "key": "pearl"},
+    {"name": "ampersend-sdk", "prize": 500, "key": "ampersend"},
+    {"name": "Bankr LLM Gateway", "prize": 5000, "key": "bankr"},
+    {"name": "Vault Position Monitor", "prize": 1500, "key": "lido"},
+    {"name": "Zyfai Yield Agent", "prize": 600, "key": "zyfai-agent"},
+    {"name": "Zyfai Yield Infra", "prize": 400, "key": "zyfai-infra"},
+    {"name": "Slice Hooks", "prize": 700, "key": "slice"},
+    {"name": "ERC-8128 Auth", "prize": 750, "key": "erc8128"},
+    {"name": "Synthesis Open", "prize": 28100, "key": "open"}
+  ]
+}

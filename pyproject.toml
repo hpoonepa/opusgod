@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opusgod"
+version = "0.1.0"
+description = "Autonomous DeFi intelligence agent — earns its own living"
+requires-python = ">=3.10"
+dependencies = [
+    "web3>=6.0",
+    "httpx>=0.25",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-telegram-bot>=20",
+    "apscheduler>=3.10",
+    "eth-account>=0.11",
+    "aiohttp>=3.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "pytest-httpx>=0.30"]
+mech = ["open-aea>=1.55", "open-aea-ledger-ethereum>=1.55"]
+
+[project.scripts]
+opusgod = "src.agent.core:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src", "config"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
