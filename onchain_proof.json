@@ -1,0 +1,193 @@
+{
+  "agent": "OpusGod",
+  "wallet": "0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+  "generated_at": 1774244665,
+  "chains": {
+    "gnosis": {
+      "chain_id": 100,
+      "balance_xdai": 0.0,
+      "mech_requests_sent": 0,
+      "mech_receipts": []
+    },
+    "base": {
+      "chain_id": 8453,
+      "balance_eth": 0.0,
+      "registration_tx": "0x7e0b823aa8e3fa451e1b41302b27e19c40213c6cc42f830c9a94e787e81efe2d"
+    }
+  },
+  "erc8128_signatures": [
+    {
+      "tool": "yield_optimizer",
+      "timestamp": 1774244665,
+      "nonce": "ac6723cc4e36c0e1",
+      "signature": "816107771da855568eb9bee90502f1e28537f86720b550ca9650d524d667042f3a774d480eb286c6f12ea4192de7e0952f702e084ae9929dd438454b8f4ab43f1c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "d024c8f4b9920cc5494f5f98dc77bb3d0dc1b6eb65650bcc850e9b79b89ce462"
+    },
+    {
+      "tool": "risk_assessor",
+      "timestamp": 1774244666,
+      "nonce": "d5e3fac43978f182",
+      "signature": "e8c9e308484b9eaa0036fd5359e7783d44068eb8833e828dd862c19f39f692cc054807d892208d1209b0257e1e4d243b829152c27b902e201a5842e6a88e69f51c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "177e4ee5848b447096d7f824d580f07665ae0260c68d6b21f858db321d65427b"
+    },
+    {
+      "tool": "vault_monitor",
+      "timestamp": 1774244667,
+      "nonce": "cce29155a4284a8a",
+      "signature": "0ec904c1cb7eef3109daaa4463e38f9f5efdbaae5a0a4de56ce34c31a16e872e1be644701c01c02f77c89af7caeaf9cdd8808445d79ac4aef464891e18bbe8091b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "0050d47fa7d5c708549c9233157a24a6a91694b481eca985152eb34f4450857a"
+    },
+    {
+      "tool": "protocol_analyzer",
+      "timestamp": 1774244668,
+      "nonce": "e7dd32aa16381e46",
+      "signature": "f92d188d840bb6dfef1bb7bbd7d0e5b4422f727540415ee48ba4c26a7d160c6a2ade4d24d3eb0ebd4a9cd74da3577b88f88c88c7504baf8818ddc347a2755b7c1c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "c0b3b9248fc030d6a3769734cb2dcb2c0973aed55732239ed232d86ea9e99903"
+    },
+    {
+      "tool": "portfolio_rebalancer",
+      "timestamp": 1774244669,
+      "nonce": "19e6d84a564c81d9",
+      "signature": "ee7774d80dbe49b58193eab8087c23c11f5060c61f220652013096882ab8d5df3450bc8cea6615d485e0bbb420d1ac37c0efeaf4fc0d8928b264feb4e421a4241b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "d73e11eae9a356bf1a7d270dbe44dbb2bdac41ddc89bdc18c568b138beb16884"
+    },
+    {
+      "tool": "yield_optimizer",
+      "timestamp": 1774244670,
+      "nonce": "6185c7861a850c19",
+      "signature": "0238a7e510a4aa9b91509f52d7e5c783e707e7b26fa45fa61e2aa03d484cbfe921c8ffa0de02a85d43dd87b120cf3947a6e95f95a4ece696a051046203ecfc231b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "4438d9be0aeee4f4d689ed73fadcd212436045f643e844b95c2ef460433d8e9e"
+    },
+    {
+      "tool": "risk_assessor",
+      "timestamp": 1774244671,
+      "nonce": "31299305ccf019b1",
+      "signature": "6f65907c5bdd255c64f385941a52aa698bb6142c9e412fecdf2680afcc936a0642688f3dcd4de644d9e2f300d3e89ffe0b99cd5f2f576b92728a33ca8706ab281c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "5790f35bdc48296f7835f7c4dd0fcf8a9b92223587c3d27c93cac6b95bcf05d9"
+    },
+    {
+      "tool": "vault_monitor",
+      "timestamp": 1774244672,
+      "nonce": "550f8c59ee7304ab",
+      "signature": "69f12cde7142319418c156c5faf86b5c91c698133d6872968f4794682ba9a13c77952aec57f3e68e77204d632804dc65a215b49321b39fc5a7054805bee2f4951b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "09b7cde3fb3b55d1a7592902be966726ccc3dea5516b4abd0fea20e6552d1f32"
+    },
+    {
+      "tool": "protocol_analyzer",
+      "timestamp": 1774244673,
+      "nonce": "988f30dde9dc7a4b",
+      "signature": "f4f724b694ea94c9e5269b436c4c5cf88e713dc0bda1b8646f3ca3f4ec83bb926011138361cd4923a1e5146d4a4a0295a2716541d5c57efe760658ad9cb500f21b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "3f65750c09f595e822beaf2370e93c315e5633e64927474850a155299e00f9c2"
+    },
+    {
+      "tool": "portfolio_rebalancer",
+      "timestamp": 1774244674,
+      "nonce": "6c84c804c5684576",
+      "signature": "1d4d1b7d5b854d834a647ec5b9eb9555ef4b0575058364f53c6c9dda4f2bf0a17e6537623966b1075322b7afac20bd83dd656e70fe1e25f18cfe7d281365e1db1c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "9836133232dbf026aae41b572cca70959ad691266a83bd49a31a3e1ea4b1621e"
+    },
+    {
+      "tool": "yield_optimizer",
+      "timestamp": 1774244675,
+      "nonce": "736ff519088587b8",
+      "signature": "0db691e780aaba79884e5371205eb4832e6c6dfb8ce4c6d959d127752753a5b8132d65744a45ece15b7cbe44e432181457fbbcffbc46439ffcf0e5ed806cd1951c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "c6d345705b72377dc9984e2b281be6e36e2fae5aebb4946e98c55e15d7fb0fb7"
+    },
+    {
+      "tool": "risk_assessor",
+      "timestamp": 1774244676,
+      "nonce": "4bf8d18375a593f1",
+      "signature": "705cf096b1162034715be174cdd6f3dc22c333c5547beb4cf4b110ba7f07965c406908711f77ccaba120482918b08bf239eb65e415f3de90ad4e863c95fc5e5b1b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "4fbdf25569ec1bb0ba1329cfbeec9467d74bc907fd032d7f181a1a0001e2c6b4"
+    },
+    {
+      "tool": "vault_monitor",
+      "timestamp": 1774244677,
+      "nonce": "5d8b2b684e60528e",
+      "signature": "20c0e5644c4e60223a3ada648a3d390241331c10a16acb3e1ae078051aaecebc6c74dc18e31c2d87d5f8e5c4c88d4b5a61bd7c49ba16a853f9a5d0e8241002391b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "f509d0b4f41525bcd7d5058f538c20f99b5616acdff27e337e1a8d02e7e49f37"
+    },
+    {
+      "tool": "protocol_analyzer",
+      "timestamp": 1774244678,
+      "nonce": "ab0e4062f18253b2",
+      "signature": "167d1dbb9d8e2102d3e6ecb47a63e8960a93dbc19541bd6690b9041c67a754e21151cad1a8646d887df1f306538a908377791f896f0db30be75475291c156dd71c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "b82c43eb713e6d8882cfe81d2c0210c33caea3b1056fb73d0b14485080114a19"
+    },
+    {
+      "tool": "portfolio_rebalancer",
+      "timestamp": 1774244679,
+      "nonce": "87a746f0f7900816",
+      "signature": "8cde86b9acc9a16782e24f6ea031ca5a9ab9c23f3fb2824fcdbc6dbef269899300ed732de2f26048d7cd6779b42c15580d3d7d649c10bb6dd61bcbb54de922e41c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "8e602c08d8bbac1c514566cd677c69e0f2b3210482aa218db2e6c732aedf0d63"
+    },
+    {
+      "tool": "yield_optimizer",
+      "timestamp": 1774244680,
+      "nonce": "698c6d0961373ab6",
+      "signature": "a869e102a322da410e95dec13731ddfe99e1efac001bd1a1271d2204238ee6df3e14335dbc5458dcb84ff3f2d2cd195b2b82f009139a9e5cec08d1110164cb891c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "efb2962c7346c542ef69a9e1e43a577199e05d54584ab41099e0a3f2083e5cde"
+    },
+    {
+      "tool": "risk_assessor",
+      "timestamp": 1774244681,
+      "nonce": "8679fbc4fa10d318",
+      "signature": "205d0683cb9cce6acdeb4544fe4f48ca5d51a947e3a1a014568c37240b9e8b4432837a05b5f5c24c5ed157396ce5ec8b682dbec7cc19c4445522e19c903a77201c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "95cc71b2c1336a76ad1f8610fc9d7c531e0f95653095187c0afcb6454e0614eb"
+    },
+    {
+      "tool": "vault_monitor",
+      "timestamp": 1774244682,
+      "nonce": "4b1b9dd47e64319c",
+      "signature": "5c1fea3c393e1d479a3122bd32a0e34ab7188dde1b6ba7e1a8e1dec72b4e6d8538b4701ac08d4d840d08dd6f1e24c31cc9d413e125d1978471305d82add5b8101b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "865334f4ca23dbea3c891f33de66350afcee5bdc4b294096e77035b0389b5b16"
+    },
+    {
+      "tool": "protocol_analyzer",
+      "timestamp": 1774244683,
+      "nonce": "83aadb01d1310a62",
+      "signature": "9dbf575305c84475e1b2f87708b509c6aecd35b3f219db606664366cdef5d1c0264ba82230c17f7761960644cbd593acd4bf3840cc445cdc36ec9eeeee6d23b71c",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "b5f336c76affce684aea8627bfd47f9cc5dd776d4e99439a9533afee32a41f33"
+    },
+    {
+      "tool": "portfolio_rebalancer",
+      "timestamp": 1774244684,
+      "nonce": "ffe261513748f84e",
+      "signature": "48883964bfe2f0d2e5a004bead625c394524c912286fb66af1b5985473e0f945500d72df12e83e3e3393ebc0cf5d521cd1b1fbcd22c6c6f6b57ab0494c9bf0661b",
+      "keyid": "erc8128:100:0x1C5d1099bf0c667C18D479b1855B0b866ffdEe22",
+      "sig_base_hash": "7baa6ac0e527d260103d18c4580d594b6b2b7ad950c9c2bb95681a752fcb1f2c"
+    }
+  ],
+  "self_transfers": [],
+  "mech_tools": [
+    "yield_optimizer",
+    "risk_assessor",
+    "vault_monitor",
+    "protocol_analyzer",
+    "portfolio_rebalancer"
+  ],
+  "summary": {
+    "total_on_chain_txs": 0,
+    "total_erc8128_sigs": 20,
+    "chains_active": []
+  }
+}
