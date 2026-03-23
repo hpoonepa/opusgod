@@ -49,12 +49,16 @@ class MechClient:
         return payload.encode("utf-8")
 
     async def _send_onchain(self, data: bytes) -> str:
-        """Build, sign, and send a real on-chain transaction."""
+        """Build, sign, and send a real on-chain transaction.
+
+        Nonce lock is released BEFORE waiting for receipt to avoid
+        blocking other transactions during the 120s wait.
+        """
         async with self._nonce_lock:
             nonce = await self.w3.eth.get_transaction_count(self.address)
             gas_price = await self.w3.eth.gas_price
 
-            tx = self.contract.functions.request(data).build_transaction({
+            tx = await self.contract.functions.request(data).build_transaction({
                 "from": self.address,
                 "value": self.mech_price,
                 "gas": 300_000,
@@ -72,12 +76,14 @@ class MechClient:
 
             signed = self._account.sign_transaction(tx)
             tx_hash = await self.w3.eth.send_raw_transaction(signed.raw_transaction)
-            receipt = await self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
 
-            if receipt.get("status") == 0:
-                logger.error(f"Mech request tx reverted: {tx_hash.hex()}")
-            self._total_gas += receipt.get("gasUsed", 0)
-            return tx_hash.hex()
+        # Wait for receipt OUTSIDE the nonce lock so other txs can proceed
+        receipt = await self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+        if receipt.get("status") == 0:
+            logger.error(f"Mech request tx reverted: {tx_hash.hex()}")
+        self._total_gas += receipt.get("gasUsed", 0)
+        return tx_hash.hex()
 
     async def send_request(self, tool: str, query: str) -> str:
         """Send a mech hire request on-chain."""

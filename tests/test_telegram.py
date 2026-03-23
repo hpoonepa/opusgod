@@ -9,7 +9,7 @@ from src.integrations.telegram import TelegramNotifier
 def notifier():
     with patch("src.integrations.telegram.Bot") as MockBot:
         MockBot.return_value = MagicMock()
-        n = TelegramNotifier(bot_token="test-token", chat_id="123456")
+        n = TelegramNotifier(bot_token="real-bot-token", chat_id="123456")
         return n
 
 
@@ -61,3 +61,21 @@ class TestTelegramNotifier:
         text = notifier.format_anomaly_alert(anomalies)
         assert "2 Anomalies" in text
         assert "APR" in text.upper()
+
+    def test_empty_token_disabled(self):
+        """TelegramNotifier doesn't crash on empty token."""
+        n = TelegramNotifier(bot_token="", chat_id="123")
+        assert n._enabled is False
+        assert n._bot is None
+
+    @pytest.mark.asyncio
+    async def test_disabled_notifier_logs_only(self):
+        """Disabled notifier (empty token) logs instead of sending."""
+        n = TelegramNotifier(bot_token="", chat_id="123")
+        # Should not raise
+        await n._send_message("test message")
+
+    def test_test_token_disabled(self):
+        """TelegramNotifier treats 'test-token' as disabled."""
+        n = TelegramNotifier(bot_token="test-token", chat_id="123")
+        assert n._enabled is False

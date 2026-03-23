@@ -36,6 +36,7 @@ class OpusGodAgent:
         self.settings = get_settings()
         self.ctx = AgentContext()
         self.scheduler = AgentScheduler()
+        self._state_lock = asyncio.Lock()
 
         # --- Core integrations ---
         self.bankr = BankrClient(
@@ -55,6 +56,7 @@ class OpusGodAgent:
         self.ampersend = AmpersendClient(
             api_key=self.settings.ampersend_api_key,
             private_key=self.settings.private_key,
+            max_payment=self.settings.ampersend_max_payment,
         )
         self.signer = ERC8128Signer(private_key=self.settings.private_key, chain_id=100)
         self.slice_hook = SliceHookManager(
@@ -64,7 +66,11 @@ class OpusGodAgent:
         )
 
         # --- Mech server + client ---
-        self.mech_server = MechServer(bankr=self.bankr, port=self.settings.mech_server_port)
+        self.mech_server = MechServer(
+            bankr=self.bankr,
+            port=self.settings.mech_server_port,
+            private_key=self.settings.private_key,
+        )
         self.mech_client = MechClient(
             private_key=self.settings.private_key,
             target_mech=self.settings.mech_target_address,
@@ -81,11 +87,31 @@ class OpusGodAgent:
         # --- Revenue tracking ---
         self._mech_revenue: float = 0.0
         self._slice_revenue: float = 0.0
+        self._gas_costs: float = 0.0
         self._last_milestone_hit: float = 0.0
 
         # --- Monitoring state ---
         self._prev_apr: float = 0.0
         self._prev_tvl: float = 0.0
+
+    # ------------------------------------------------------------------
+    # State transitions (thread-safe)
+    # ------------------------------------------------------------------
+
+    async def _safe_transition(self, target: AgentState) -> bool:
+        """Thread-safe state transition with lock."""
+        async with self._state_lock:
+            if self.ctx.can_transition(target):
+                self.ctx.transition(target)
+                return True
+            return False
+
+    async def _recover_to_idle(self, context: str) -> None:
+        """Recover agent to IDLE state after an error."""
+        async with self._state_lock:
+            if self.ctx.state != AgentState.IDLE and self.ctx.can_transition(AgentState.IDLE):
+                self.ctx.transition(AgentState.IDLE)
+                logger.info(f"Recovered to IDLE after {context}")
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -138,7 +164,7 @@ class OpusGodAgent:
         try:
             # Transition to MONITORING
             if self.ctx.state == AgentState.IDLE:
-                self.ctx.transition(AgentState.MONITORING)
+                await self._safe_transition(AgentState.MONITORING)
 
             stats = await self.lido.get_steth_stats()
             self.ctx.vaults_monitored += 1
@@ -166,19 +192,17 @@ class OpusGodAgent:
             else:
                 # Return to IDLE if no anomalies
                 if self.ctx.state == AgentState.MONITORING:
-                    self.ctx.transition(AgentState.IDLE)
+                    await self._safe_transition(AgentState.IDLE)
         except Exception as e:
             logger.error(f"Vault check failed: {e}")
             self.ctx.last_error = str(e)
-            # Return to IDLE on error
-            if self.ctx.state == AgentState.MONITORING and self.ctx.can_transition(AgentState.IDLE):
-                self.ctx.transition(AgentState.IDLE)
+            await self._recover_to_idle("vault check error")
 
     async def _handle_anomalies(self, alerts: list[VaultAlert], stats: dict) -> None:
         """MONITORING -> ANALYZING: process detected anomalies."""
         # Transition to ANALYZING
         if self.ctx.state == AgentState.MONITORING:
-            self.ctx.transition(AgentState.ANALYZING)
+            await self._safe_transition(AgentState.ANALYZING)
 
         # Send Telegram alerts
         for alert in alerts:
@@ -218,21 +242,20 @@ class OpusGodAgent:
         has_critical = any(a.severity == AlertSeverity.CRITICAL for a in alerts)
         if has_critical and self.ctx.state == AgentState.ANALYZING:
             try:
-                self.ctx.transition(AgentState.HIRING)
+                await self._safe_transition(AgentState.HIRING)
                 tx = await self.mech_client.send_request(
                     "risk_assessor",
                     f"CRITICAL alert detected for lido: {alerts[0].message}",
                 )
                 self.ctx.requests_hired = self.mech_client.requests_sent
                 logger.info(f"Auto-hired risk_assessor on CRITICAL: {tx[:10]}...")
-                if self.ctx.state == AgentState.HIRING:
-                    self.ctx.transition(AgentState.IDLE)
+                await self._recover_to_idle("auto-hire complete")
             except Exception as e:
                 logger.error(f"Auto-hire failed: {e}")
-                if self.ctx.state == AgentState.HIRING:
-                    self.ctx.transition(AgentState.IDLE)
+                self.ctx.last_error = str(e)
+                await self._recover_to_idle("auto-hire error")
         elif self.ctx.state == AgentState.ANALYZING:
-            self.ctx.transition(AgentState.IDLE)
+            await self._safe_transition(AgentState.IDLE)
 
     # ------------------------------------------------------------------
     # Serving  (IDLE -> SERVING)
@@ -240,28 +263,37 @@ class OpusGodAgent:
 
     async def handle_mech_request(self, tool_name: str, query: str) -> str:
         """Handle an inbound mech request and track revenue. IDLE -> SERVING -> IDLE."""
-        if self.ctx.state == AgentState.IDLE:
-            self.ctx.transition(AgentState.SERVING)
+        try:
+            if self.ctx.state == AgentState.IDLE:
+                await self._safe_transition(AgentState.SERVING)
 
-        result = await self.mech_server.handle_request(tool_name, query)
-        self.ctx.requests_served = self.mech_server.requests_served
+            result = await self.mech_server.handle_request(tool_name, query)
+            self.ctx.requests_served = self.mech_server.requests_served
 
-        # Track mech fee revenue via SliceHook dynamic pricing
-        fee = self.slice_hook.calculate_dynamic_price(
-            base_price_usd=0.01,
-            demand_factor=max(1.0, self.mech_server.requests_served / 10.0),
-            market_volatility=0.1,
-        )
-        self._mech_revenue += fee
-        self._update_total_revenue()
+            # Track mech fee revenue via SliceHook dynamic pricing
+            fee = self.slice_hook.calculate_dynamic_price(
+                base_price_usd=0.01,
+                demand_factor=max(1.0, self.mech_server.requests_served / 10.0),
+                market_volatility=0.1,
+            )
+            self._mech_revenue += fee
 
-        # Create payment intent via Ampersend
-        self.ampersend.create_payment_intent(fee, f"mech-request-{tool_name}")
+            # Record Slice commerce revenue from the dynamic pricing
+            self._slice_revenue += fee * 0.1  # 10% platform fee to Slice
+            self._update_total_revenue()
 
-        if self.ctx.state == AgentState.SERVING:
-            self.ctx.transition(AgentState.IDLE)
+            # Create payment intent via Ampersend
+            self.ampersend.create_payment_intent(fee, f"mech-request-{tool_name}")
 
-        return result
+            if self.ctx.state == AgentState.SERVING:
+                await self._safe_transition(AgentState.IDLE)
+
+            return result
+        except Exception as e:
+            logger.error(f"Mech request failed: {e}")
+            self.ctx.last_error = str(e)
+            await self._recover_to_idle("mech request error")
+            raise
 
     # ------------------------------------------------------------------
     # Hiring  (IDLE -> HIRING)
@@ -269,17 +301,27 @@ class OpusGodAgent:
 
     async def hire_agent(self, tool: str, query: str) -> str:
         """IDLE -> HIRING -> IDLE: hire another mech agent."""
-        if self.ctx.state == AgentState.IDLE:
-            self.ctx.transition(AgentState.HIRING)
+        try:
+            if self.ctx.state == AgentState.IDLE:
+                await self._safe_transition(AgentState.HIRING)
 
-        tx_hash = await self.mech_client.send_request(tool, query)
-        self.ctx.requests_hired = self.mech_client.requests_sent
+            tx_hash = await self.mech_client.send_request(tool, query)
+            self.ctx.requests_hired = self.mech_client.requests_sent
 
-        # Return to IDLE
-        if self.ctx.state == AgentState.HIRING:
-            self.ctx.transition(AgentState.IDLE)
+            # Track gas costs from hiring
+            stats = self.mech_client.get_stats()
+            self._gas_costs = stats["total_gas_used"] * 1e-9  # Convert to approximate USD
 
-        return tx_hash
+            # Return to IDLE
+            if self.ctx.state == AgentState.HIRING:
+                await self._safe_transition(AgentState.IDLE)
+
+            return tx_hash
+        except Exception as e:
+            logger.error(f"Hire agent failed: {e}")
+            self.ctx.last_error = str(e)
+            await self._recover_to_idle("hire agent error")
+            raise
 
     # ------------------------------------------------------------------
     # Revenue tracking
@@ -336,7 +378,9 @@ class OpusGodAgent:
         """Return a breakdown of revenue and expenses across all sources."""
         self._update_total_revenue()
         bankr_costs = self.bankr.get_usage_stats().get("total_cost_usd", 0.0)
-        total_expenses = bankr_costs + self.zyfai.total_spent
+        mech_hire_costs = self.mech_client.mech_price * self.mech_client.requests_sent * 1e-18  # wei to ETH approx
+        total_expenses = bankr_costs + self.zyfai.total_spent + self._gas_costs + mech_hire_costs
+        net_pnl = self.ctx.total_revenue_usd - total_expenses
         report = {
             "mech_fees": round(self._mech_revenue, 6),
             "zyfai_yield": round(self.zyfai.total_earned, 6),
@@ -347,9 +391,12 @@ class OpusGodAgent:
             "expenses": {
                 "bankr_inference": round(bankr_costs, 6),
                 "zyfai_operations": round(self.zyfai.total_spent, 6),
+                "gas_costs": round(self._gas_costs, 6),
+                "mech_hiring": round(mech_hire_costs, 6),
                 "total": round(total_expenses, 6),
             },
-            "self_sustaining": self.ctx.total_revenue_usd > total_expenses,
+            "net_pnl": round(net_pnl, 6),
+            "self_sustaining": net_pnl > 0 and self.ctx.total_revenue_usd > 0,
         }
         return report
 
@@ -382,10 +429,10 @@ class OpusGodAgent:
         # Start mech server (SERVING)
         mech_runner = await self.mech_server.start()
 
-        # Start Pearl dashboard
+        # Start Pearl dashboard — bind to 0.0.0.0 for Docker/Pearl compatibility
         pearl_runner = web.AppRunner(self.pearl_app)
         await pearl_runner.setup()
-        pearl_site = web.TCPSite(pearl_runner, "127.0.0.1", self.settings.pearl_port)
+        pearl_site = web.TCPSite(pearl_runner, "0.0.0.0", self.settings.pearl_port)
         await pearl_site.start()
         logger.info(f"Pearl server on port {self.settings.pearl_port}")
 
@@ -397,6 +444,7 @@ class OpusGodAgent:
         logger.info(f"  Pearl: port {self.settings.pearl_port}")
         logger.info(f"  Identity: {self.signer.address}")
         logger.info(f"  Slice pricing: {self.slice_hook.get_pricing_config()}")
+        logger.info(f"  Demo mode: {self.settings.demo_mode}")
 
         try:
             while self.ctx.state != AgentState.SHUTDOWN:

@@ -22,6 +22,7 @@ class TestOpusGodAgent:
             s.mech_server_port = 8080
             s.mech_target_address = "0x77af31De935740567Cf4fF1986D04B2c964A786a"
             s.ampersend_api_key = "test"
+            s.ampersend_max_payment = 1.0
             s.zyfai_api_key = "test"
             s.zyfai_safe_address = "0x" + "00" * 20
             s.poll_interval_seconds = 30
@@ -29,11 +30,17 @@ class TestOpusGodAgent:
             s.pearl_port = 8716
             s.lido_api_base = "https://eth-api.lido.fi"
             s.slice_contract_address = ""
+            s.demo_mode = False
             mock_settings.return_value = s
             return OpusGodAgent()
 
     def test_init_state_is_startup(self, agent):
         assert agent.ctx.state == AgentState.STARTUP
+
+    def test_has_state_lock(self, agent):
+        """Verify asyncio.Lock exists for thread-safe state transitions."""
+        import asyncio
+        assert isinstance(agent._state_lock, asyncio.Lock)
 
     @pytest.mark.asyncio
     async def test_startup_transitions_to_idle(self, agent):
@@ -54,6 +61,26 @@ class TestOpusGodAgent:
             assert isinstance(result, tuple)
             assert agent.ctx.requests_served == 1
             assert agent.ctx.state == AgentState.IDLE  # returns to IDLE after serving
+
+    @pytest.mark.asyncio
+    async def test_handle_mech_request_error_recovery(self, agent):
+        """Verify agent recovers to IDLE on mech request failure."""
+        agent.ctx.transition(AgentState.IDLE)
+        with patch.object(agent.mech_server, "handle_request",
+                          new_callable=AsyncMock, side_effect=Exception("Tool failed")):
+            with pytest.raises(Exception, match="Tool failed"):
+                await agent.handle_mech_request("yield_optimizer", "test query")
+            assert agent.ctx.state == AgentState.IDLE
+
+    @pytest.mark.asyncio
+    async def test_hire_agent_error_recovery(self, agent):
+        """Verify agent recovers to IDLE on hire failure."""
+        agent.ctx.transition(AgentState.IDLE)
+        with patch.object(agent.mech_client, "send_request",
+                          new_callable=AsyncMock, side_effect=Exception("On-chain failed")):
+            with pytest.raises(Exception, match="On-chain failed"):
+                await agent.hire_agent("risk_assessor", "test query")
+            assert agent.ctx.state == AgentState.IDLE
 
     def test_sign_request_returns_headers(self, agent):
         headers = agent.sign_request("GET", "https://example.com/api")
@@ -80,6 +107,22 @@ class TestOpusGodAgent:
         assert "ampersend_treasury" in report
         assert "zyfai_pnl" in report
         assert "expenses" in report
+        assert "net_pnl" in report
+        assert "gas_costs" in report["expenses"]
+        assert "mech_hiring" in report["expenses"]
+
+    def test_get_revenue_report_self_sustaining_requires_revenue(self, agent):
+        """self_sustaining should be False when both revenue and expenses are 0."""
+        report = agent.get_revenue_report()
+        assert report["self_sustaining"] is False
+
+    def test_get_revenue_report_self_sustaining_positive(self, agent):
+        """self_sustaining should be True when net P&L is positive."""
+        agent._mech_revenue = 10.0
+        agent._update_total_revenue()
+        report = agent.get_revenue_report()
+        assert report["self_sustaining"] is True
+        assert report["net_pnl"] > 0
 
     def test_record_zyfai_yield(self, agent):
         agent.record_zyfai_yield(5.0)
@@ -111,10 +154,12 @@ class TestOpusGodAgent:
         with patch.object(agent.bankr, "chat", new_callable=AsyncMock, return_value='{"result": "ok"}'):
             await agent.handle_mech_request("yield_optimizer", "query")
             assert agent._mech_revenue > 0
+            assert agent._slice_revenue > 0  # Slice revenue now wired in
             assert agent.ctx.total_revenue_usd > 0
             assert agent.ctx.state == AgentState.IDLE  # returns to IDLE after serving
             treasury = agent.ampersend.get_treasury_status()
             assert treasury["total_payments"] >= 0
+            assert treasury["scheme"] == "eip712"
 
     @pytest.mark.asyncio
     async def test_check_vaults_transitions_monitoring_idle(self, agent):

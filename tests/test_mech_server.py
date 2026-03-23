@@ -38,3 +38,14 @@ class TestMechServer:
         await server.handle_request("risk_assessor", "test query")
         await server.handle_request("vault_monitor", "test query 2")
         assert server.requests_served == 2
+
+    @pytest.mark.asyncio
+    async def test_deliver_without_web3(self, server):
+        """deliver() returns None when no web3 provider is configured."""
+        result = await server.deliver(1, b"test data")
+        assert result is None
+
+    def test_has_deliver_method(self, server):
+        """Verify deliver() method exists on MechServer."""
+        assert hasattr(server, "deliver")
+        assert callable(server.deliver)

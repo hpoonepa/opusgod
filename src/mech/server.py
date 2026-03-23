@@ -8,14 +8,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import os
 
 from aiohttp import web
+from eth_account import Account
 
 from src.mech.tools import TOOL_REGISTRY
 from src.onchain.contracts import MECH_ABI
+
+if TYPE_CHECKING:
+    from src.integrations.bankr import BankrClient
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +27,9 @@ MAX_QUERY_LENGTH = 10_000
 
 
 class MechServer:
-    """Olas-compatible mech server with HTTP + on-chain event handling."""
+    """Olas-compatible mech server with HTTP + on-chain event handling + deliver()."""
 
-    def __init__(self, bankr, port: int = 8080,
+    def __init__(self, bankr: BankrClient, port: int = 8080,
                  web3_provider=None, mech_address: str = "",
                  private_key: str = ""):
         self.bankr = bankr
@@ -34,6 +38,7 @@ class MechServer:
         self._w3 = web3_provider
         self._mech_address = mech_address
         self._private_key = private_key
+        self._account = Account.from_key(private_key) if private_key else None
         self._contract = None
         self._event_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
@@ -61,6 +66,49 @@ class MechServer:
 
         logger.info(f"Served request #{self.requests_served}: {tool_name}")
         return result
+
+    async def deliver(self, request_id: int, data: bytes) -> str | None:
+        """Deliver a response on-chain for a completed mech request.
+
+        This is the missing piece that allows the mech to complete the
+        on-chain request/response cycle required by the Olas protocol.
+        """
+        if not self._contract or not self._w3 or not self._account:
+            logger.warning("Cannot deliver: no web3 provider, contract, or signing key")
+            return None
+
+        try:
+            nonce = await self._w3.eth.get_transaction_count(self._account.address)
+            gas_price = await self._w3.eth.gas_price
+
+            tx = self._contract.functions.deliver(request_id, data).build_transaction({
+                "from": self._account.address,
+                "gas": 300_000,
+                "gasPrice": gas_price,
+                "nonce": nonce,
+                "chainId": 100,  # Gnosis
+            })
+
+            # Estimate gas with 20% buffer
+            try:
+                estimated = await self._w3.eth.estimate_gas(tx)
+                tx["gas"] = int(estimated * 1.2)
+            except Exception as e:
+                logger.warning(f"Gas estimation failed for deliver, using 300k: {e}")
+
+            signed = self._account.sign_transaction(tx)
+            tx_hash = await self._w3.eth.send_raw_transaction(signed.raw_transaction)
+            receipt = await self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+            if receipt.get("status") == 0:
+                logger.error(f"Deliver tx reverted: {tx_hash.hex()}")
+                return None
+
+            logger.info(f"Delivered response for request {request_id}: tx={tx_hash.hex()}")
+            return tx_hash.hex()
+        except Exception as e:
+            logger.error(f"Failed to deliver response for request {request_id}: {e}")
+            return None
 
     def list_tools(self) -> list[dict]:
         return [{"name": name, "description": tool["description"]}
@@ -95,21 +143,30 @@ class MechServer:
             await asyncio.sleep(5)
 
     async def _handle_onchain_request(self, log: dict) -> None:
-        """Process an on-chain Request event."""
+        """Process an on-chain Request event and deliver the response."""
         try:
             data = bytes.fromhex(log["data"][2:]) if isinstance(log["data"], str) else log["data"]
             payload = json.loads(data)
             tool_name = payload.get("tool", "")
             query = payload.get("query", "")
             result = await self.handle_request(tool_name, query)
+
+            # Deliver the response on-chain
+            request_id = int(log["topics"][1], 16) if len(log.get("topics", [])) > 1 else 0
+            if request_id > 0 and result:
+                response_data = json.dumps(result[0] if isinstance(result, tuple) else result).encode()
+                await self.deliver(request_id, response_data)
+
             logger.info(f"Processed on-chain request: {tool_name}")
         except Exception as e:
             logger.error(f"Failed to process on-chain request: {e}")
 
     async def _handle_http(self, request: web.Request) -> web.Response:
-        # API key auth
+        # API key auth — reject if key is configured but not provided
         api_key = request.headers.get("X-API-Key", "")
         expected_key = os.environ.get("OPUS_MECH_API_KEY", "")
+        if not expected_key:
+            logger.warning("OPUS_MECH_API_KEY not set — mech server running without auth")
         if expected_key and api_key != expected_key:
             return web.json_response({"error": "Unauthorized"}, status=401)
 
@@ -143,9 +200,9 @@ class MechServer:
     async def start(self) -> web.AppRunner:
         runner = web.AppRunner(self._app)
         await runner.setup()
-        bind_addr = os.environ.get("OPUS_MECH_BIND", "127.0.0.1")
+        bind_addr = os.environ.get("OPUS_MECH_BIND", "0.0.0.0")
         site = web.TCPSite(runner, bind_addr, self.port)
         await site.start()
-        logger.info(f"Mech server listening on port {self.port}")
+        logger.info(f"Mech server listening on {bind_addr}:{self.port}")
         await self.start_event_listener()
         return runner

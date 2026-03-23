@@ -28,7 +28,8 @@ class TelegramNotifier:
     def __init__(self, bot_token: str, chat_id: str):
         self.bot_token = bot_token
         self.chat_id = chat_id
-        self._bot = Bot(token=bot_token)
+        self._enabled = bool(bot_token and bot_token != "test-token")
+        self._bot = Bot(token=bot_token) if self._enabled else None
         self._last_send: float = 0.0
 
     def format_alert(self, alert: VaultAlert) -> str:
@@ -65,6 +66,9 @@ class TelegramNotifier:
         )
 
     async def _send_message(self, text: str, parse_mode: str = "HTML") -> None:
+        if not self._enabled or not self._bot:
+            logger.info(f"[DEMO] Telegram alert (not sent): {text[:80]}...")
+            return
         import time
         now = time.time()
         wait = self.MIN_SEND_INTERVAL - (now - self._last_send)

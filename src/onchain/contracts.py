@@ -6,6 +6,12 @@ MECH_ABI = [
      "outputs": [{"name": "requestId", "type": "uint256"}], "stateMutability": "payable", "type": "function"},
     {"inputs": [{"name": "requestId", "type": "uint256"}], "name": "getResponse",
      "outputs": [{"name": "", "type": "bytes"}], "stateMutability": "view", "type": "function"},
+    # deliver() — mech operator calls this to fulfill a request on-chain
+    {"inputs": [
+        {"name": "requestId", "type": "uint256"},
+        {"name": "data", "type": "bytes"},
+    ], "name": "deliver",
+     "outputs": [], "stateMutability": "nonpayable", "type": "function"},
     # Deliver event — emitted when a mech fulfills a request
     {"anonymous": False, "inputs": [
         {"indexed": True, "name": "requestId", "type": "uint256"},

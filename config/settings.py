@@ -9,6 +9,9 @@ from pydantic import Field, field_validator
 class Settings(BaseSettings):
     """All configuration loaded from environment / .env file."""
 
+    # --- Demo mode: skip integrations that need API keys ---
+    demo_mode: bool = Field(default=False, description="Run in demo mode with mock integrations")
+
     # --- Required: Agent identity ---
     private_key: str = Field(
         default="0x" + "00" * 32,
@@ -49,6 +52,9 @@ class Settings(BaseSettings):
     # --- Ampersend payments ---
     ampersend_api_key: str = Field(default="", description="Ampersend API key")
 
+    # --- Ampersend payment cap ---
+    ampersend_max_payment: float = Field(default=1.0, description="Max single x402 payment in token units")
+
     # --- Pearl dashboard ---
     pearl_port: int = Field(default=8716)
 
@@ -66,17 +72,28 @@ class Settings(BaseSettings):
     @classmethod
     def validate_private_key(cls, v: str) -> str:
         if not v:
-            raise ValueError("OPUS_PRIVATE_KEY is required")
+            raise ValueError(
+                "OPUS_PRIVATE_KEY is required. Set it in your .env file:\n"
+                "  OPUS_PRIVATE_KEY=0x<your-64-char-hex-key>\n"
+                "Or run with OPUS_DEMO_MODE=true to skip key validation."
+            )
         if not re.match(r"^0x[0-9a-fA-F]{64}$", v):
             raise ValueError(
-                "OPUS_PRIVATE_KEY must be a 0x-prefixed 64-char hex string"
+                "OPUS_PRIVATE_KEY must be a 0x-prefixed 64-char hex string.\n"
+                "Example: OPUS_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
             )
         if v == "0x" + "00" * 32:
             raise ValueError(
-                "Default zero key is insecure — set OPUS_PRIVATE_KEY in .env"
+                "Default zero key is insecure — set OPUS_PRIVATE_KEY in .env.\n"
+                "Or run with OPUS_DEMO_MODE=true for a demo without real keys."
             )
         return v
 
 
 def get_settings() -> Settings:
+    """Load settings. In demo mode, relax private key validation."""
+    import os
+    if os.environ.get("OPUS_DEMO_MODE", "").lower() in ("true", "1", "yes"):
+        os.environ.setdefault("OPUS_PRIVATE_KEY", "0x" + "ab" * 32)
+        os.environ["OPUS_DEMO_MODE"] = "true"
     return Settings()

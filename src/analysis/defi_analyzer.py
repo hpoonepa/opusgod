@@ -7,8 +7,12 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any, TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from src.integrations.bankr import BankrClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +23,10 @@ DEFILLAMA_YIELDS = "https://yields.llama.fi"
 class DeFiAnalyzer:
     """Core DeFi analysis engine powered by real data + Bankr LLM."""
 
-    def __init__(self, bankr):
+    def __init__(self, bankr: BankrClient):
         self.bankr = bankr
         self._http = httpx.AsyncClient(timeout=30.0)
-        self._cache: dict[str, tuple[float, any]] = {}  # key -> (timestamp, data)
+        self._cache: dict[str, tuple[float, Any]] = {}  # key -> (timestamp, data)
         self._cache_ttl = 300  # 5 minutes
 
     def _cache_get(self, key: str):
@@ -77,6 +81,7 @@ class DeFiAnalyzer:
         """Fetch real DeFiLlama data + LLM analysis."""
         llama_data = await self._fetch_protocol(protocol)
 
+        current_tvl = 0
         context = f"Protocol: {protocol}"
         if llama_data:
             tvl = llama_data.get("tvl", [{}])
