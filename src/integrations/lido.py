@@ -58,9 +58,22 @@ class LidoMonitor:
         resp.raise_for_status()
         return resp.json().get("data", resp.json())
 
+    async def get_steth_tvl(self) -> dict:
+        """Get stETH TVL from Lido API."""
+        resp = await self._client.get(f"{self.api_base}/v1/protocol/steth/tvl")
+        resp.raise_for_status()
+        return resp.json().get("data", resp.json())
+
     async def get_steth_stats(self) -> dict:
-        """Get stETH statistics (backward compat)."""
-        return await self.get_steth_apr()
+        """Get combined stETH APR + TVL."""
+        apr_data = await self.get_steth_apr()
+        try:
+            tvl_data = await self.get_steth_tvl()
+            if isinstance(apr_data, dict):
+                apr_data["tvl"] = tvl_data.get("tvl", tvl_data) if isinstance(tvl_data, dict) else tvl_data
+        except Exception:
+            pass  # TVL is optional
+        return apr_data
 
     def record_data_point(self, apr: float, tvl: float, timestamp: float = 0.0) -> None:
         """Record a data point for historical tracking."""

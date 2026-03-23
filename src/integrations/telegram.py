@@ -23,10 +23,13 @@ SEVERITY_EMOJI = {
 class TelegramNotifier:
     """Sends alerts via Telegram using python-telegram-bot v20+."""
 
+    MIN_SEND_INTERVAL = 1.0  # seconds between messages (rate limit)
+
     def __init__(self, bot_token: str, chat_id: str):
         self.bot_token = bot_token
         self.chat_id = chat_id
         self._bot = Bot(token=bot_token)
+        self._last_send: float = 0.0
 
     def format_alert(self, alert: VaultAlert) -> str:
         emoji = SEVERITY_EMOJI.get(alert.severity, "?")
@@ -54,11 +57,25 @@ class TelegramNotifier:
             lines.append(f"{emoji} [{a.metric.upper()}] {a.message}")
         return "\n".join(lines)
 
+    def format_milestone(self, milestone: float, total_revenue: float) -> str:
+        return (
+            f"\U0001f4b0 <b>Revenue Milestone: ${milestone:.2f}</b>\n"
+            f"Total revenue: <code>${total_revenue:.2f}</code>\n"
+            f"OpusGod is earning its own living."
+        )
+
     async def _send_message(self, text: str, parse_mode: str = "HTML") -> None:
+        import time
+        now = time.time()
+        wait = self.MIN_SEND_INTERVAL - (now - self._last_send)
+        if wait > 0:
+            import asyncio
+            await asyncio.sleep(wait)
         try:
             await self._bot.send_message(
                 chat_id=self.chat_id, text=text, parse_mode=parse_mode,
             )
+            self._last_send = time.time()
         except TelegramError as e:
             logger.error(f"Telegram send failed: {e}")
 
@@ -71,6 +88,9 @@ class TelegramNotifier:
     async def send_anomalies(self, anomalies: list[VaultAlert]) -> None:
         if anomalies:
             await self._send_message(self.format_anomaly_alert(anomalies))
+
+    async def send_milestone(self, milestone: float, total_revenue: float) -> None:
+        await self._send_message(self.format_milestone(milestone, total_revenue))
 
     async def close(self) -> None:
         """Cleanup (Bot doesn't need explicit close)."""

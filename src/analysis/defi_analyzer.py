@@ -22,19 +22,43 @@ class DeFiAnalyzer:
     def __init__(self, bankr):
         self.bankr = bankr
         self._http = httpx.AsyncClient(timeout=30.0)
+        self._cache: dict[str, tuple[float, any]] = {}  # key -> (timestamp, data)
+        self._cache_ttl = 300  # 5 minutes
+
+    def _cache_get(self, key: str):
+        import time
+        if key in self._cache:
+            ts, data = self._cache[key]
+            if time.time() - ts < self._cache_ttl:
+                return data
+            del self._cache[key]
+        return None
+
+    def _cache_set(self, key: str, data):
+        import time
+        self._cache[key] = (time.time(), data)
 
     async def _fetch_protocol(self, protocol: str) -> dict | None:
-        """Fetch protocol data from DeFiLlama."""
+        """Fetch protocol data from DeFiLlama (cached)."""
+        cached = self._cache_get(f"protocol:{protocol}")
+        if cached is not None:
+            return cached
         try:
             resp = await self._http.get(f"{DEFILLAMA_BASE}/protocol/{protocol}")
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                self._cache_set(f"protocol:{protocol}", data)
+                return data
         except httpx.HTTPError as e:
             logger.warning(f"DeFiLlama fetch failed for {protocol}: {e}")
         return None
 
     async def _fetch_yields(self, chain: str | None = None, min_tvl: float = 0) -> list[dict]:
-        """Fetch yield pool data from DeFiLlama."""
+        """Fetch yield pool data from DeFiLlama (cached)."""
+        cache_key = f"yields:{chain}:{min_tvl}"
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
         try:
             resp = await self._http.get(f"{DEFILLAMA_YIELDS}/pools")
             if resp.status_code == 200:
@@ -43,6 +67,7 @@ class DeFiAnalyzer:
                     pools = [p for p in pools if p.get("chain", "").lower() == chain.lower()]
                 if min_tvl > 0:
                     pools = [p for p in pools if (p.get("tvlUsd") or 0) >= min_tvl]
+                self._cache_set(cache_key, pools)
                 return pools
         except httpx.HTTPError as e:
             logger.warning(f"DeFiLlama yields fetch failed: {e}")
@@ -61,8 +86,9 @@ class DeFiAnalyzer:
             context += f"\nCategory: {llama_data.get('category', 'Unknown')}"
 
         raw = await self.bankr.analyze_defi(f"Analyze DeFi protocol with real data:\n{context}")
+        current_tvl_value = current_tvl if llama_data else None
         return {"protocol": protocol, "analysis": self._parse(raw),
-                "live_data": {"tvl": current_tvl if llama_data else None}}
+                "live_data": {"tvl": current_tvl_value}}
 
     async def get_top_yields(self, chain: str | None = None, min_tvl: float = 1_000_000,
                               limit: int = 10) -> list[dict]:
@@ -83,9 +109,24 @@ class DeFiAnalyzer:
         ]
 
     async def compare_yields(self, protocols: list[str]) -> dict:
-        query = f"Compare yields across: {', '.join(protocols)}. Rank by risk-adjusted return."
-        raw = await self.bankr.analyze_defi(query)
-        return {"comparison": self._parse(raw), "protocols": protocols}
+        """Compare yields across protocols using real DeFiLlama data."""
+        real_data = {}
+        for protocol in protocols:
+            llama = await self._fetch_protocol(protocol)
+            if llama:
+                tvl_list = llama.get("tvl", [])
+                real_data[protocol] = {
+                    "tvl": tvl_list[-1].get("totalLiquidityUSD", 0) if tvl_list else 0,
+                    "chains": llama.get("chains", []),
+                    "category": llama.get("category", "unknown"),
+                }
+
+        context = f"Compare yields across: {', '.join(protocols)}. Rank by risk-adjusted return."
+        if real_data:
+            context += f"\n\nReal DeFiLlama data:\n{json.dumps(real_data, indent=1)}"
+        raw = await self.bankr.analyze_defi(context)
+        return {"comparison": self._parse(raw), "protocols": protocols,
+                "live_data": real_data}
 
     async def get_market_overview(self) -> dict:
         """Market overview with real DeFiLlama data."""

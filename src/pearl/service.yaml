@@ -1,13 +1,31 @@
 name: opusgod
 author: opusgod
 version: 0.1.0
-description: Autonomous DeFi Intelligence Agent
+description: "Autonomous DeFi Intelligence Agent — earns its own living via mech fees, yield, and commerce"
 license: Apache-2.0
 aea_version: ">=1.55.0, <2.0.0"
 agent_type: service
 number_of_agents: 1
+fingerprint: {}
+fingerprint_ignore_patterns: []
+dependencies:
+  open-aea:
+    version: ">=1.55.0,<2.0.0"
 deployment:
   agent:
+    image: opusgod:latest
     ports:
-      - 8716:8716
-      - 8080:8080
+      - "8716:8716"   # Pearl dashboard
+      - "8080:8080"   # Mech server
+    env:
+      - OPUS_PRIVATE_KEY
+      - OPUS_BANKR_API_KEY
+      - OPUS_TELEGRAM_BOT_TOKEN
+      - OPUS_TELEGRAM_CHAT_ID
+      - OPUS_ZYFAI_API_KEY
+      - OPUS_AMPERSEND_API_KEY
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8716/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

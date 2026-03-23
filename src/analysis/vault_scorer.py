@@ -13,7 +13,7 @@ class VaultScore:
 class VaultScorer:
     @staticmethod
     def score(apy: float, tvl: float, age_days: int, audit_count: int) -> VaultScore:
-        yield_score = min(apy / 1.0, 10.0)
+        yield_score = min(apy, 10.0)
         tvl_factor = min(tvl / 1e9, 1.0)
         audit_factor = min(audit_count / 3.0, 1.0)
         age_factor = min(age_days / 365.0, 1.0)

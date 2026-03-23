@@ -8,14 +8,14 @@ version = "0.1.0"
 description = "Autonomous DeFi intelligence agent — earns its own living"
 requires-python = ">=3.10"
 dependencies = [
-    "web3>=6.0",
-    "httpx>=0.25",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "python-telegram-bot>=20",
-    "apscheduler>=3.10",
-    "eth-account>=0.11",
-    "aiohttp>=3.9",
+    "web3>=6.0,<7.0",
+    "httpx>=0.25,<1.0",
+    "pydantic>=2.0,<3.0",
+    "pydantic-settings>=2.0,<3.0",
+    "python-telegram-bot>=20,<22",
+    "eth-account>=0.11,<1.0",
+    "aiohttp>=3.9,<4.0",
+    "python-dotenv>=1.0,<2.0",
 ]
 
 [project.optional-dependencies]

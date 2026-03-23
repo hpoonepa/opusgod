@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -7,3 +9,10 @@ dist/
 build/
 .venv/
 .DS_Store
+agent_performance.json
+*.key
+*.pem
+*.log
+node_modules/
+.mypy_cache/
+.ruff_cache/

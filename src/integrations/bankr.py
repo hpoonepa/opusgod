@@ -27,7 +27,7 @@ MODEL_ROUTES: dict[str, str] = {
     "portfolio": "claude-sonnet-4-20250514",
 }
 
-TEMP_ROUTES: dict[str, float] = {
+TEMPERATURE_ROUTES: dict[str, float] = {
     "risk": 0.0, "score": 0.0, "analysis": 0.1,
     "strategy": 0.7, "creative": 0.7,
 }
@@ -77,8 +77,8 @@ class BankrClient:
     def _resolve_temp(self, task_type: str | None, temperature: float | None) -> float:
         if temperature is not None:
             return temperature
-        if task_type and task_type in TEMP_ROUTES:
-            return TEMP_ROUTES[task_type]
+        if task_type and task_type in TEMPERATURE_ROUTES:
+            return TEMPERATURE_ROUTES[task_type]
         return 0.3
 
     async def _request_with_retry(self, payload: dict, max_retries: int = 3) -> dict:
@@ -159,12 +159,15 @@ class BankrClient:
 
     def get_usage_stats(self) -> dict:
         """Get accumulated usage statistics."""
+        total = self._usage.prompt_tokens + self._usage.completion_tokens
         return {
             "prompt_tokens": self._usage.prompt_tokens,
             "completion_tokens": self._usage.completion_tokens,
-            "total_tokens": self._usage.prompt_tokens + self._usage.completion_tokens,
+            "total_tokens": total,
             "total_cost_usd": round(self._usage.total_cost_usd, 6),
             "requests": self._usage.requests,
+            "avg_tokens_per_request": total // max(self._usage.requests, 1),
+            "avg_cost_per_request": round(self._usage.total_cost_usd / max(self._usage.requests, 1), 6),
         }
 
     async def close(self) -> None:

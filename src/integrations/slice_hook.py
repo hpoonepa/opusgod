@@ -13,18 +13,23 @@ from web3 import AsyncWeb3, AsyncHTTPProvider
 
 logger = logging.getLogger(__name__)
 
-# Minimal ABI for the SlicePricingHook contract
+# ABI matching contracts/SlicePricingHook.sol (OpusGodPricingHook)
 SLICE_HOOK_ABI = [
-    {"inputs": [{"name": "productId", "type": "uint256"}], "name": "getPrice",
-     "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
-    {"inputs": [{"name": "_basePrice", "type": "uint256"}, {"name": "_surgeMultiplier", "type": "uint256"}],
+    {"inputs": [
+        {"name": "", "type": "uint256"}, {"name": "", "type": "uint256"},
+        {"name": "", "type": "address"}, {"name": "quantity", "type": "uint256"},
+        {"name": "", "type": "address"}, {"name": "", "type": "bytes"},
+    ], "name": "productPrice",
+     "outputs": [{"name": "ethPrice", "type": "uint256"}, {"name": "currencyPrice", "type": "uint256"}],
+     "stateMutability": "view", "type": "function"},
+    {"inputs": [{"name": "_basePriceWei", "type": "uint256"}, {"name": "_demandMultiplier", "type": "uint256"}],
      "name": "updatePricing", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
-    {"inputs": [], "name": "basePrice",
+    {"inputs": [], "name": "basePriceWei",
      "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
-    {"inputs": [], "name": "surgeMultiplier",
+    {"inputs": [], "name": "demandMultiplier",
      "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
-    {"inputs": [], "name": "totalPurchases",
-     "outputs": [{"name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "owner",
+     "outputs": [{"name": "", "type": "address"}], "stateMutability": "view", "type": "function"},
 ]
 
 
@@ -54,29 +59,33 @@ class SliceHookManager:
         price = base_price_usd * demand_factor * (1.0 + volatility_premium)
         return round(price, 6)
 
-    async def get_on_chain_price(self, product_id: int = 0) -> int:
-        """Read price from deployed contract."""
+    async def get_on_chain_price(self, slicer_id: int = 0, product_id: int = 0,
+                                    quantity: int = 1) -> int:
+        """Read price from deployed OpusGodPricingHook contract."""
         if not self._contract:
             raise ValueError("No contract configured — set hook_address")
-        return await self._contract.functions.getPrice(product_id).call()
+        zero = "0x0000000000000000000000000000000000000000"
+        eth_price, _ = await self._contract.functions.productPrice(
+            slicer_id, product_id, zero, quantity, zero, b""
+        ).call()
+        return eth_price
 
     async def get_on_chain_stats(self) -> dict:
         """Read pricing parameters from contract."""
         if not self._contract:
             raise ValueError("No contract configured")
-        base = await self._contract.functions.basePrice().call()
-        surge = await self._contract.functions.surgeMultiplier().call()
-        purchases = await self._contract.functions.totalPurchases().call()
-        return {"base_price": base, "surge_multiplier": surge, "total_purchases": purchases}
+        base = await self._contract.functions.basePriceWei().call()
+        demand = await self._contract.functions.demandMultiplier().call()
+        return {"base_price_wei": base, "demand_multiplier": demand}
 
-    async def update_pricing_params(self, base_price_wei: int, surge_multiplier: int,
+    async def update_pricing_params(self, base_price_wei: int, demand_multiplier: int,
                                      account) -> str:
         """Write new pricing params to contract (requires signer)."""
         if not self._contract or not self._w3:
             raise ValueError("No contract configured")
 
         nonce = await self._w3.eth.get_transaction_count(account.address)
-        tx = self._contract.functions.updatePricing(base_price_wei, surge_multiplier).build_transaction({
+        tx = self._contract.functions.updatePricing(base_price_wei, demand_multiplier).build_transaction({
             "from": account.address,
             "nonce": nonce,
             "gasPrice": await self._w3.eth.gas_price,

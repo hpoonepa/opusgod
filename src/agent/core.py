@@ -214,8 +214,24 @@ class OpusGodAgent:
         except Exception as e:
             logger.error(f"Analysis failed: {e}")
 
-        # Return to IDLE
-        if self.ctx.state == AgentState.ANALYZING:
+        # Auto-hire specialist agent on CRITICAL alerts
+        has_critical = any(a.severity == AlertSeverity.CRITICAL for a in alerts)
+        if has_critical and self.ctx.state == AgentState.ANALYZING:
+            try:
+                self.ctx.transition(AgentState.HIRING)
+                tx = await self.mech_client.send_request(
+                    "risk_assessor",
+                    f"CRITICAL alert detected for lido: {alerts[0].message}",
+                )
+                self.ctx.requests_hired = self.mech_client.requests_sent
+                logger.info(f"Auto-hired risk_assessor on CRITICAL: {tx[:10]}...")
+                if self.ctx.state == AgentState.HIRING:
+                    self.ctx.transition(AgentState.IDLE)
+            except Exception as e:
+                logger.error(f"Auto-hire failed: {e}")
+                if self.ctx.state == AgentState.HIRING:
+                    self.ctx.transition(AgentState.IDLE)
+        elif self.ctx.state == AgentState.ANALYZING:
             self.ctx.transition(AgentState.IDLE)
 
     # ------------------------------------------------------------------
@@ -223,7 +239,10 @@ class OpusGodAgent:
     # ------------------------------------------------------------------
 
     async def handle_mech_request(self, tool_name: str, query: str) -> str:
-        """Handle an inbound mech request and track revenue."""
+        """Handle an inbound mech request and track revenue. IDLE -> SERVING -> IDLE."""
+        if self.ctx.state == AgentState.IDLE:
+            self.ctx.transition(AgentState.SERVING)
+
         result = await self.mech_server.handle_request(tool_name, query)
         self.ctx.requests_served = self.mech_server.requests_served
 
@@ -238,6 +257,9 @@ class OpusGodAgent:
 
         # Create payment intent via Ampersend
         self.ampersend.create_payment_intent(fee, f"mech-request-{tool_name}")
+
+        if self.ctx.state == AgentState.SERVING:
+            self.ctx.transition(AgentState.IDLE)
 
         return result
 
@@ -286,14 +308,19 @@ class OpusGodAgent:
 
     async def _notify_revenue_milestone(self, milestone: float) -> None:
         try:
-            await self.telegram.send_status({
-                "state": self.ctx.state.name,
-                "requests_served": self.ctx.requests_served,
-                "total_revenue_usd": self.ctx.total_revenue_usd,
-                "milestone": milestone,
-            })
+            await self.telegram.send_milestone(milestone, self.ctx.total_revenue_usd)
         except Exception as e:
             logger.error(f"Failed to send revenue milestone alert: {e}")
+
+    async def _poll_zyfai_yield(self) -> None:
+        """Scheduled task: poll Zyfai for new yield earnings."""
+        try:
+            delta = await self.zyfai.poll_yield()
+            if delta > 0:
+                self._update_total_revenue()
+                logger.info(f"Zyfai yield: +${delta:.4f}")
+        except Exception as e:
+            logger.error(f"Zyfai poll failed: {e}")
 
     def record_zyfai_yield(self, amount: float) -> None:
         """Record yield from Zyfai SDK and update total revenue."""
@@ -306,17 +333,25 @@ class OpusGodAgent:
         self._update_total_revenue()
 
     def get_revenue_report(self) -> dict:
-        """Return a breakdown of revenue across all sources."""
+        """Return a breakdown of revenue and expenses across all sources."""
         self._update_total_revenue()
-        return {
+        bankr_costs = self.bankr.get_usage_stats().get("total_cost_usd", 0.0)
+        total_expenses = bankr_costs + self.zyfai.total_spent
+        report = {
             "mech_fees": round(self._mech_revenue, 6),
             "zyfai_yield": round(self.zyfai.total_earned, 6),
             "slice_commerce": round(self._slice_revenue, 6),
-            "total_usd": round(self.ctx.total_revenue_usd, 6),
+            "total_revenue_usd": round(self.ctx.total_revenue_usd, 6),
             "ampersend_treasury": self.ampersend.get_treasury_status(),
-            "zyfai_status": self.zyfai.get_yield_status(),
-            "self_sustaining": self.ctx.total_revenue_usd > self.zyfai.total_spent,
+            "zyfai_pnl": self.zyfai.get_pnl(),
+            "expenses": {
+                "bankr_inference": round(bankr_costs, 6),
+                "zyfai_operations": round(self.zyfai.total_spent, 6),
+                "total": round(total_expenses, 6),
+            },
+            "self_sustaining": self.ctx.total_revenue_usd > total_expenses,
         }
+        return report
 
     # ------------------------------------------------------------------
     # Status
@@ -332,11 +367,16 @@ class OpusGodAgent:
     async def run(self) -> None:
         await self.startup()
 
-        # Register scheduled vault monitoring
+        # Register scheduled tasks
         self.scheduler.register(
             "vault_check",
             self.check_vaults,
             interval_seconds=self.settings.vault_check_interval_seconds,
+        )
+        self.scheduler.register(
+            "zyfai_yield_poll",
+            self._poll_zyfai_yield,
+            interval_seconds=self.settings.poll_interval_seconds,
         )
 
         # Start mech server (SERVING)
@@ -345,7 +385,7 @@ class OpusGodAgent:
         # Start Pearl dashboard
         pearl_runner = web.AppRunner(self.pearl_app)
         await pearl_runner.setup()
-        pearl_site = web.TCPSite(pearl_runner, "0.0.0.0", self.settings.pearl_port)
+        pearl_site = web.TCPSite(pearl_runner, "127.0.0.1", self.settings.pearl_port)
         await pearl_site.start()
         logger.info(f"Pearl server on port {self.settings.pearl_port}")
 
@@ -361,7 +401,7 @@ class OpusGodAgent:
         try:
             while self.ctx.state != AgentState.SHUTDOWN:
                 write_performance_file(self.status())
-                await asyncio.sleep(1)
+                await asyncio.sleep(30)
         except asyncio.CancelledError:
             pass
         finally:

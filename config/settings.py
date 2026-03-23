@@ -71,6 +71,10 @@ class Settings(BaseSettings):
             raise ValueError(
                 "OPUS_PRIVATE_KEY must be a 0x-prefixed 64-char hex string"
             )
+        if v == "0x" + "00" * 32:
+            raise ValueError(
+                "Default zero key is insecure — set OPUS_PRIVATE_KEY in .env"
+            )
         return v
 
 

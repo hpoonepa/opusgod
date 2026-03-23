@@ -50,7 +50,8 @@ class GnosisClient:
             try:
                 estimated = await self.w3.eth.estimate_gas(tx)
                 tx["gas"] = int(estimated * 1.2)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Gas estimation failed, using default 300k: {e}")
                 tx["gas"] = 300_000
 
             signed = self._account.sign_transaction(tx)
@@ -59,6 +60,9 @@ class GnosisClient:
             return tx_hash.hex()
 
     async def wait_for_receipt(self, tx_hash: str, timeout: int = 120) -> dict:
-        """Wait for transaction receipt."""
+        """Wait for transaction receipt and check status."""
         receipt = await self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
-        return dict(receipt)
+        result = dict(receipt)
+        if result.get("status") == 0:
+            logger.error(f"Gnosis tx reverted: {tx_hash} (gas used: {result.get('gasUsed')})")
+        return result

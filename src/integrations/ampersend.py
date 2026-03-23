@@ -51,6 +51,11 @@ class AmpersendClient:
 
             if resp.status_code == 200:
                 self._record_payment(payment_details, payment_proof)
+            else:
+                logger.warning(
+                    f"x402 payment retry failed with status {resp.status_code} "
+                    f"for {method} {url} — payment may have been lost"
+                )
 
         return resp
 
@@ -66,11 +71,11 @@ class AmpersendClient:
         }
 
     def _sign_payment(self, details: dict) -> dict:
-        """Create EIP-712 signed payment authorization."""
+        """Create personal_sign payment authorization (EIP-191)."""
         if not self._account:
             raise PaymentError("No private key configured for signing")
 
-        # Build EIP-712 domain and message
+        # Build EIP-191 personal_sign message
         message_data = (
             f"x402-payment:{details['amount']}:{details['token']}:"
             f"{details['recipient']}:{details['nonce']}"
@@ -106,6 +111,8 @@ class AmpersendClient:
 
     def create_payment_intent(self, amount_usd: float, description: str) -> dict:
         """Create a payment intent (for compatibility)."""
+        if amount_usd <= 0:
+            raise PaymentError(f"Invalid payment amount: {amount_usd}")
         intent_id = str(uuid.uuid4())
         intent = {
             "id": intent_id, "amount": amount_usd, "currency": "USD",
@@ -116,10 +123,12 @@ class AmpersendClient:
         return intent
 
     def complete_payment(self, payment_id: str) -> bool:
-        """Mark a payment as completed."""
+        """Mark a payment as completed. Only adds to total_spent if not already completed."""
         if payment_id in self._payments:
-            self._payments[payment_id]["status"] = "completed"
-            self._total_spent += self._payments[payment_id].get("amount", 0)
+            payment = self._payments[payment_id]
+            if payment["status"] != "completed":
+                payment["status"] = "completed"
+                self._total_spent += payment.get("amount", 0)
             return True
         return False
 

@@ -46,11 +46,15 @@ class ZyfaiClient:
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         )
         self._operations: list[Operation] = []
+        self._max_operations: int = 10_000
         self.total_earned: float = 0.0
         self.total_spent: float = 0.0
 
     async def _request(self, method: str, path: str, **kwargs) -> dict:
-        resp = await self._client.request(method, f"{self._base_url}{path}", **kwargs)
+        try:
+            resp = await self._client.request(method, f"{self._base_url}{path}", **kwargs)
+        except httpx.HTTPError as e:
+            raise ZyfaiAPIError(0, f"Network error: {e}") from e
         if resp.status_code >= 400:
             raise ZyfaiAPIError(resp.status_code, resp.text)
         return resp.json() if resp.content else {}
@@ -85,29 +89,40 @@ class ZyfaiClient:
         result = await self._request("GET", f"/v1/safes/{self.safe_address}/positions")
         return result.get("positions", []) if isinstance(result, dict) else result
 
-    async def get_yield_status(self) -> dict:
-        """Get current yield status with P&L."""
-        try:
-            positions = await self.get_positions()
-            position_value = sum(float(p.get("value", 0)) for p in positions)
-            earned = sum(float(p.get("earned", 0)) for p in positions)
-            self.total_earned = max(self.total_earned, earned)
-        except (ZyfaiAPIError, httpx.HTTPError):
-            position_value = 0.0
-
+    def get_yield_status(self) -> dict:
+        """Get current yield status with P&L (sync, uses cached totals)."""
         available = self.total_earned - self.total_spent
         return {
             "safe_address": self.safe_address,
             "earned": self.total_earned,
             "spent": self.total_spent,
             "available": available,
+            "operations": len(self._operations),
             "self_sustaining": self.total_earned > self.total_spent,
         }
+
+    async def poll_yield(self) -> float:
+        """Poll remote positions and update earned total. Returns new earnings."""
+        try:
+            positions = await self.get_positions()
+            earned = sum(float(p.get("earned", 0)) for p in positions)
+            delta = max(0.0, earned - self.total_earned)
+            if delta > 0:
+                self.record_yield(delta)
+            return delta
+        except (ZyfaiAPIError, httpx.HTTPError) as e:
+            logger.warning(f"Zyfai yield poll failed: {e}")
+            return 0.0
+
+    def _trim_operations(self) -> None:
+        if len(self._operations) > self._max_operations:
+            self._operations = self._operations[-self._max_operations // 2:]
 
     def record_yield(self, amount: float) -> None:
         """Record yield earned."""
         self.total_earned += amount
         self._operations.append(Operation("yield", amount))
+        self._trim_operations()
         logger.info(f"Zyfai yield: +${amount:.4f} (total: ${self.total_earned:.4f})")
 
     def record_spend(self, amount: float) -> None:

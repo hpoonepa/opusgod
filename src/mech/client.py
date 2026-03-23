@@ -67,13 +67,15 @@ class MechClient:
             try:
                 estimated = await self.w3.eth.estimate_gas(tx)
                 tx["gas"] = int(estimated * 1.2)
-            except Exception:
-                pass  # Use default 300k
+            except Exception as e:
+                logger.warning(f"Gas estimation failed, using default 300k: {e}")
 
             signed = self._account.sign_transaction(tx)
             tx_hash = await self.w3.eth.send_raw_transaction(signed.raw_transaction)
             receipt = await self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
 
+            if receipt.get("status") == 0:
+                logger.error(f"Mech request tx reverted: {tx_hash.hex()}")
             self._total_gas += receipt.get("gasUsed", 0)
             return tx_hash.hex()
 

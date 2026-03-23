@@ -10,12 +10,16 @@ import json
 import logging
 from typing import Any
 
+import os
+
 from aiohttp import web
 
 from src.mech.tools import TOOL_REGISTRY
 from src.onchain.contracts import MECH_ABI
 
 logger = logging.getLogger(__name__)
+
+MAX_QUERY_LENGTH = 10_000
 
 
 class MechServer:
@@ -34,7 +38,7 @@ class MechServer:
         self._event_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
-        self._app = web.Application()
+        self._app = web.Application(client_max_size=1024 * 1024)
         self._app.router.add_post("/request", self._handle_http)
         self._app.router.add_get("/tools", self._list_tools_http)
         self._app.router.add_get("/health", self._health)
@@ -103,9 +107,22 @@ class MechServer:
             logger.error(f"Failed to process on-chain request: {e}")
 
     async def _handle_http(self, request: web.Request) -> web.Response:
+        # API key auth
+        api_key = request.headers.get("X-API-Key", "")
+        expected_key = os.environ.get("OPUS_MECH_API_KEY", "")
+        if expected_key and api_key != expected_key:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+
         data = await request.json()
+        tool_name = data.get("tool", "")
+        query = data.get("query", "")
+        if not tool_name or not query:
+            return web.json_response({"error": "Missing tool or query"}, status=400)
+        if len(query) > MAX_QUERY_LENGTH:
+            return web.json_response({"error": "Query too long"}, status=413)
+
         try:
-            result = await self.handle_request(data.get("tool", ""), data.get("query", ""))
+            result = await self.handle_request(tool_name, query)
             # result is a tuple (text, prompt, error, metadata, raw)
             if isinstance(result, tuple):
                 return web.json_response({
@@ -126,7 +143,8 @@ class MechServer:
     async def start(self) -> web.AppRunner:
         runner = web.AppRunner(self._app)
         await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", self.port)
+        bind_addr = os.environ.get("OPUS_MECH_BIND", "127.0.0.1")
+        site = web.TCPSite(runner, bind_addr, self.port)
         await site.start()
         logger.info(f"Mech server listening on port {self.port}")
         await self.start_event_listener()

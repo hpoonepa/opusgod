@@ -5,8 +5,8 @@ every API call to an on-chain identity.
 
 Signature flow:
 1. Build RFC 9421 signature base from HTTP components
-2. Keccak-256 hash the signature base
-3. Sign with secp256k1 ECDSA (raw, NOT personal_sign)
+2. SHA-256 hash the signature base
+3. Sign with EIP-191 personal_sign (encode_defunct + sign_message)
 4. Output Signature-Input + Signature headers per RFC 9421
 """
 from __future__ import annotations

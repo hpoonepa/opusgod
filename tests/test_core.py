@@ -48,12 +48,12 @@ class TestOpusGodAgent:
     @pytest.mark.asyncio
     async def test_handle_mech_request(self, agent):
         agent.ctx.transition(AgentState.IDLE)
-        agent.ctx.transition(AgentState.SERVING)
         with patch.object(agent.bankr, "chat", new_callable=AsyncMock, return_value='{"result": "test"}'):
             result = await agent.handle_mech_request("yield_optimizer", "test query")
             # handle_mech_request now returns a tuple from the tool
             assert isinstance(result, tuple)
             assert agent.ctx.requests_served == 1
+            assert agent.ctx.state == AgentState.IDLE  # returns to IDLE after serving
 
     def test_sign_request_returns_headers(self, agent):
         headers = agent.sign_request("GET", "https://example.com/api")
@@ -76,22 +76,23 @@ class TestOpusGodAgent:
         assert report["mech_fees"] == 0.0
         assert report["zyfai_yield"] == 0.0
         assert report["slice_commerce"] == 0.0
-        assert report["total_usd"] == 0.0
+        assert report["total_revenue_usd"] == 0.0
         assert "ampersend_treasury" in report
-        assert "zyfai_status" in report
+        assert "zyfai_pnl" in report
+        assert "expenses" in report
 
     def test_record_zyfai_yield(self, agent):
         agent.record_zyfai_yield(5.0)
         report = agent.get_revenue_report()
         assert report["zyfai_yield"] == 5.0
-        assert report["total_usd"] == 5.0
+        assert report["total_revenue_usd"] == 5.0
         assert agent.ctx.total_revenue_usd == 5.0
 
     def test_record_slice_revenue(self, agent):
         agent.record_slice_revenue(3.0)
         report = agent.get_revenue_report()
         assert report["slice_commerce"] == 3.0
-        assert report["total_usd"] == 3.0
+        assert report["total_revenue_usd"] == 3.0
 
     def test_revenue_aggregation(self, agent):
         agent.record_zyfai_yield(2.0)
@@ -99,7 +100,7 @@ class TestOpusGodAgent:
         agent._mech_revenue = 1.5
         agent._update_total_revenue()
         report = agent.get_revenue_report()
-        assert report["total_usd"] == 6.5
+        assert report["total_revenue_usd"] == 6.5
         assert report["mech_fees"] == 1.5
         assert report["zyfai_yield"] == 2.0
         assert report["slice_commerce"] == 3.0
@@ -107,11 +108,11 @@ class TestOpusGodAgent:
     @pytest.mark.asyncio
     async def test_handle_mech_request_tracks_revenue(self, agent):
         agent.ctx.transition(AgentState.IDLE)
-        agent.ctx.transition(AgentState.SERVING)
         with patch.object(agent.bankr, "chat", new_callable=AsyncMock, return_value='{"result": "ok"}'):
             await agent.handle_mech_request("yield_optimizer", "query")
             assert agent._mech_revenue > 0
             assert agent.ctx.total_revenue_usd > 0
+            assert agent.ctx.state == AgentState.IDLE  # returns to IDLE after serving
             treasury = agent.ampersend.get_treasury_status()
             assert treasury["total_payments"] >= 0
 

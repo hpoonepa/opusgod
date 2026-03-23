@@ -73,8 +73,10 @@ def format_performance(status: dict) -> dict:
     }
 
 
-def write_performance_file(status: dict, path: str = "agent_performance.json") -> None:
+def write_performance_file(status: dict, path: str | None = None) -> None:
     """Write agent performance to JSON file for Pearl monitoring."""
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "agent_performance.json")
     perf = format_performance(status)
     with open(path, "w") as f:
         json.dump(perf, f, indent=2)
@@ -113,7 +115,31 @@ def create_pearl_app(agent_status_fn: Callable[[], dict], port: int = 8716) -> w
             "self_sustaining": revenue > status.get("total_spent", 0.0),
         })
 
+    async def metrics(request: web.Request) -> web.Response:
+        status = agent_status_fn()
+        perf = format_performance(status)
+        # Prometheus-style text metrics
+        lines = [
+            f"# HELP opusgod_requests_served Total mech requests served",
+            f"# TYPE opusgod_requests_served counter",
+            f"opusgod_requests_served {perf['requests_served']}",
+            f"# HELP opusgod_requests_hired Total agents hired",
+            f"# TYPE opusgod_requests_hired counter",
+            f"opusgod_requests_hired {perf['requests_hired']}",
+            f"# HELP opusgod_vaults_monitored Total vault checks",
+            f"# TYPE opusgod_vaults_monitored counter",
+            f"opusgod_vaults_monitored {perf['vaults_monitored']}",
+            f"# HELP opusgod_revenue_usd Total revenue in USD",
+            f"# TYPE opusgod_revenue_usd gauge",
+            f"opusgod_revenue_usd {perf['total_revenue_usd']}",
+            f"# HELP opusgod_uptime_seconds Agent uptime",
+            f"# TYPE opusgod_uptime_seconds gauge",
+            f"opusgod_uptime_seconds {perf['uptime_seconds']}",
+        ]
+        return web.Response(text="\n".join(lines) + "\n", content_type="text/plain")
+
     app.router.add_get("/healthcheck", healthcheck)
     app.router.add_get("/", index)
     app.router.add_get("/funds-status", funds_status)
+    app.router.add_get("/metrics", metrics)
     return app
