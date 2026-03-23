@@ -1,3 +1,4 @@
+import json
 import pytest
 from unittest.mock import AsyncMock, patch
 from src.mech.client import MechClient
@@ -5,13 +6,18 @@ from src.mech.client import MechClient
 
 @pytest.fixture
 def client():
-    return MechClient(private_key="0x" + "ab" * 32, target_mech="0x77af31De935740567Cf4fF1986D04B2c964A786a")
+    return MechClient(
+        private_key="0x" + "ab" * 32,
+        target_mech="0x77af31De935740567Cf4fF1986D04B2c964A786a",
+        rpc_url="https://rpc.gnosischain.com",
+    )
 
 
 class TestMechClient:
     def test_init(self, client):
         assert client.target_mech.startswith("0x")
         assert client.requests_sent == 0
+        assert client.chain_id == 100
 
     @pytest.mark.asyncio
     async def test_send_request_tracks_count(self, client):
@@ -29,6 +35,14 @@ class TestMechClient:
 
     def test_build_request_payload(self, client):
         payload = client.build_request_payload("vault_monitor", "Check Aave v3")
-        assert payload["tool"] == "vault_monitor"
-        assert payload["query"] == "Check Aave v3"
-        assert "sender" in payload
+        assert isinstance(payload, bytes)
+        decoded = json.loads(payload)
+        assert decoded["tool"] == "vault_monitor"
+        assert decoded["query"] == "Check Aave v3"
+        assert "sender" in decoded
+
+    def test_get_stats(self, client):
+        stats = client.get_stats()
+        assert stats["requests_sent"] == 0
+        assert stats["total_gas_used"] == 0
+        assert "target_mech" in stats

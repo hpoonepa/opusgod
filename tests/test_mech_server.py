@@ -18,7 +18,9 @@ class TestMechServer:
     @pytest.mark.asyncio
     async def test_handle_request(self, server):
         result = await server.handle_request("yield_optimizer", "Compare Aave vs Compound")
-        assert isinstance(result, str)
+        # Now returns a tuple (text, prompt, error, metadata, raw)
+        assert isinstance(result, tuple)
+        assert len(result) == 5
         assert server.requests_served == 1
 
     @pytest.mark.asyncio
